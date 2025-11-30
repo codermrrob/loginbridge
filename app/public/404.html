@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Redirecting...</title>
+  <script>
+    // GitHub Pages SPA redirect
+    // Preserves the path and hash for the SPA router to handle
+    const base = '/loginbridge/';
+    const path = window.location.pathname;
+    const hash = window.location.hash;
+    const search = window.location.search;
+    
+    // Redirect to index.html with the original path encoded in query
+    // The SPA will decode and handle routing
+    if (path.startsWith(base)) {
+      const route = path.slice(base.length);
+      window.location.replace(base + '?route=' + encodeURIComponent(route) + hash);
+    } else {
+      window.location.replace(base + hash);
+    }
+  </script>
+</head>
+<body>
+  Redirecting...
+</body>
+</html>
+</CodeContent>
+</invoke>

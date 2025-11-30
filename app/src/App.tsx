@@ -1,7 +1,24 @@
-import { useEffect, useState } from 'react';
-import { CONFIG } from './config';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { validateConfig } from './config';
+import { googleAuthService } from './services/GoogleAuthService';
 import { bridgeService } from './services/BridgeService';
-import type { BridgeState } from './types';
+import { 
+  parseObsidianParams, 
+  ejectToObsidian, 
+  clearUrlSensitiveData,
+  buildDeeplink 
+} from './utils/deeplink';
+import type { 
+  BridgeState, 
+  AuthenticationResult,
+  GoogleCredentialResponse 
+} from './types';
+
+// Session storage keys
+const STORAGE_KEYS = {
+  SOURCE: 'bridge_source',
+  NONCE: 'bridge_nonce',
+} as const;
 
 function App() {
   const [state, setState] = useState<BridgeState>({
@@ -9,29 +26,162 @@ function App() {
     message: 'Initializing Bridge...',
   });
 
+  // Ref for the Google Sign-In button container
+  const buttonContainerRef = useRef<HTMLDivElement>(null);
+
+  // Store nonce for use in callback
+  const nonceRef = useRef<string | null>(null);
+
+  /**
+   * Handle successful Google credential response
+   */
+  const handleGoogleCredential = useCallback(
+    async (response: GoogleCredentialResponse) => {
+      console.log('[App] Received Google credential');
+
+      if (!response.credential) {
+        setState({
+          status: 'error',
+          message: 'Authentication failed',
+          error: 'No credential received from Google',
+        });
+        return;
+      }
+
+      try {
+        // Update state to show progress
+        setState({
+          status: 'exchanging',
+          message: 'Exchanging credentials with Azure...',
+        });
+
+        // Complete the full authentication flow
+        const authResult = await bridgeService.completeAuthentication(
+          response.credential
+        );
+
+        setState({
+          status: 'ejecting',
+          message: 'Authentication successful. Opening Obsidian...',
+          data: authResult,
+        });
+
+        // Eject to Obsidian
+        ejectToObsidian(authResult);
+
+        // Show manual link after delay (in case deeplink doesn't work)
+        setTimeout(() => {
+          setState((prev) => ({
+            ...prev,
+            status: 'success',
+            message: 'If Obsidian did not open, click the button below.',
+          }));
+        }, 2000);
+
+      } catch (err) {
+        console.error('[App] Authentication flow failed:', err);
+        setState({
+          status: 'error',
+          message: 'Authentication failed',
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+    []
+  );
+
+  /**
+   * Initialize Google Sign-In with the provided nonce
+   */
+  const initializeGoogleSignIn = useCallback(
+    async (nonce: string) => {
+      try {
+        setState({
+          status: 'initializing',
+          message: 'Loading Google Sign-In...',
+        });
+
+        // Store nonce for later use
+        nonceRef.current = nonce;
+        sessionStorage.setItem(STORAGE_KEYS.NONCE, nonce);
+
+        // Load the Google Identity Services script
+        await googleAuthService.loadScript();
+
+        // Initialize with our zkLogin nonce
+        googleAuthService.initialize(nonce, handleGoogleCredential);
+
+        // Set ready state - button will be rendered by useEffect below
+        setState({
+          status: 'ready',
+          message: 'Click the button below to sign in with Google',
+        });
+
+      } catch (err) {
+        console.error('[App] Failed to initialize Google Sign-In:', err);
+        setState({
+          status: 'error',
+          message: 'Failed to initialize authentication',
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+    [handleGoogleCredential]
+  );
+
+  /**
+   * Render Google button when ready and container is mounted
+   */
+  useEffect(() => {
+    if (state.status === 'ready' && buttonContainerRef.current) {
+      buttonContainerRef.current.innerHTML = '';
+      googleAuthService.renderButton(buttonContainerRef.current, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        text: 'signin_with',
+        shape: 'rectangular',
+        width: '300',
+        locale: 'en',  // Always English
+      });
+    }
+  }, [state.status]);
+
+  /**
+   * Main initialization effect
+   */
   useEffect(() => {
     const init = async () => {
       try {
-        // 1. Check for Callback (Hash)
-        const hash = window.location.hash;
-        if (hash && hash.includes('id_token=')) {
-          await handleCallback(hash);
-          return;
-        }
+        // Validate configuration first
+        validateConfig();
 
-        // 2. Check for Ingest (Query Params)
+        // Parse URL parameters
         const params = new URLSearchParams(window.location.search);
-        const source = params.get('source');
-        
-        if (source === 'obsidian') {
-          handleIngest(params);
+        const obsidianParams = parseObsidianParams(params);
+
+        if (obsidianParams) {
+          // Store source in session storage
+          sessionStorage.setItem(STORAGE_KEYS.SOURCE, 'obsidian');
+
+          // Clear URL parameters for security
+          clearUrlSensitiveData();
+
+          // Initialize Google Sign-In with the zkLogin nonce
+          await initializeGoogleSignIn(obsidianParams.nonce);
+
         } else {
+          // No valid Obsidian parameters - show idle state
           setState({
             status: 'idle',
-            message: 'Enoki Bridge: Waiting for Obsidian connection...',
+            message: 
+              'This page bridges authentication for Obsidian. ' +
+              'Please initiate login from the Obsidian plugin.',
           });
         }
+
       } catch (err) {
+        console.error('[App] Initialization error:', err);
         setState({
           status: 'error',
           message: 'Initialization failed',
@@ -41,167 +191,134 @@ function App() {
     };
 
     init();
-  }, []);
 
-  const handleIngest = async (params: URLSearchParams) => {
-    const redirect = params.get('redirect') === 'true';
-    // Critical: Capture nonce if provided by Obsidian (required for zkLogin signing)
-    const nonce = params.get('nonce');
+    // Cleanup
+    return () => {
+      googleAuthService.cancel();
+    };
+  }, [initializeGoogleSignIn]);
 
-    setState({
-      status: 'ingest',
-      message: 'Preparing to authenticate with Obsidian...',
-    });
-
-    // Persist source flag
-    sessionStorage.setItem('bridge_source', 'obsidian');
-
-    // Generate Auth URL Manually
-    const redirectUrl = `${window.location.origin}/auth/callback`;
-
-    const clientId = CONFIG.googleClientId;
-    const scope = 'openid email profile';
-    const responseType = 'id_token';
-
-    // Construct Auth URL
-    let authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${clientId}&` +
-      `redirect_uri=${encodeURIComponent(redirectUrl)}&` +
-      `response_type=${responseType}&` +
-      `scope=${encodeURIComponent(scope)}&` +
-      `nonce=${nonce || ''}`;
-
-    if (params.get('prompt')) {
-       authUrl += `&prompt=${params.get('prompt')}`;
-    } else {
-       authUrl += `&prompt=select_account`;
+  /**
+   * Render the manual Obsidian link button
+   */
+  const renderManualLink = () => {
+    if (!state.data?.jwt || !state.data?.azureToken || 
+        !state.data?.salt || !state.data?.address) {
+      return null;
     }
 
-    if (redirect) {
-      setState({ status: 'authenticating', message: 'Redirecting to provider...' });
-      window.location.href = authUrl;
-    } else {
-      setState({ 
-        status: 'ingest', 
-        message: 'Ready to connect', 
-        // Store authUrl to use in button
-        data: { jwt: authUrl, salt: '', address: '' } 
-      });
-    }
-  };
+    const deeplink = buildDeeplink(state.data as AuthenticationResult);
 
-  const handleCallback = async (hash: string) => {
-    // Verify source
-    const source = sessionStorage.getItem('bridge_source');
-    if (source !== 'obsidian') {
-      console.warn('Bridge source not found in session storage');
-      // We proceed but might warn user? Or strict security?
-      // Strict: return;
-    }
-
-    setState({ status: 'hydrating', message: 'Verifying authentication...' });
-
-    // Parse ID Token
-    const params = new URLSearchParams(hash.replace(/^#/, ''));
-    const idToken = params.get('id_token');
-
-    if (!idToken) {
-      throw new Error('No ID Token found in URL');
-    }
-
-    // Clear Hash (Security)
-    window.history.replaceState(null, '', window.location.pathname);
-
-    try {
-      // Hydrate via Backend
-      const { address, salt } = await bridgeService.authenticateAndHydrate(idToken);
-
-      setState({
-        status: 'ejecting',
-        message: 'Authentication successful. Opening Obsidian...',
-        data: { jwt: idToken, salt, address },
-      });
-
-      // Construct Deep Link
-      // obsidian://enoki-auth?jwt=...&salt=...&address=...
-      const deepLink = `obsidian://enoki-auth?jwt=${encodeURIComponent(idToken)}&salt=${encodeURIComponent(salt)}&address=${encodeURIComponent(address)}`;
-      
-      // Eject
-      window.location.href = deepLink;
-
-      // Show manual link after delay
-      setTimeout(() => {
-        setState(prev => ({
-          ...prev,
-          status: 'success',
-          message: 'If Obsidian did not open, click the button below.',
-        }));
-      }, 1500);
-
-    } catch (err) {
-      setState({
-        status: 'error',
-        message: 'Authentication verification failed',
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
+    return (
+      <a
+        href={deeplink}
+        className="btn-primary"
+        style={{ display: 'inline-block', marginTop: 'var(--spacing-md)' }}
+      >
+        Open Obsidian
+      </a>
+    );
   };
 
   return (
     <div className="container">
       <div className="card">
         <h1>Enoki Bridge</h1>
-        
+
+        {/* Error State */}
         {state.status === 'error' && (
           <div className="error-box">
-            <h3>Error</h3>
+            <h3>Configuration Error</h3>
             <p>{state.message}</p>
-            <p className="error-detail">{state.error}</p>
-            <button className="btn-primary" onClick={() => window.location.reload()}>Retry</button>
+            {state.error && <p className="error-detail">{state.error}</p>}
+            <p className="helper-text" style={{ marginTop: 'var(--spacing-md)' }}>
+              Please close this window and try again from the Obsidian plugin.
+            </p>
+            <button
+              className="btn-primary"
+              onClick={() => window.close()}
+            >
+              OK
+            </button>
           </div>
         )}
 
-        {state.status === 'ingest' && state.data?.jwt && (
-          // data.jwt holds authUrl here
-          <button 
-            className="btn-primary"
-            onClick={() => window.location.href = state.data!.jwt}
-          >
-            Log in with Google to connect your oclp wallet
-          </button>
+        {/* Idle State */}
+        {state.status === 'idle' && (
+          <div>
+            <p>{state.message}</p>
+            <p className="helper-text">
+              Waiting for connection from Obsidian plugin...
+            </p>
+          </div>
         )}
 
-        {(state.status === 'hydrating' || state.status === 'authenticating' || state.status === 'ejecting') && (
+        {/* Initializing State */}
+        {state.status === 'initializing' && (
+          <div>
+            <div className="loader"></div>
+            <p className="status-message">{state.message}</p>
+          </div>
+        )}
+
+        {/* Ready State - Show Google Sign-In Button */}
+        {state.status === 'ready' && (
+          <div>
+            <p className="status-message">{state.message}</p>
+            <div
+              ref={buttonContainerRef}
+              className="google-signin-container"
+              style={{ 
+                display: 'flex', 
+                justifyContent: 'center',
+                marginTop: 'var(--spacing-lg)',
+                minHeight: '50px',
+              }}
+            />
+            <p className="helper-text" style={{ marginTop: 'var(--spacing-md)' }}>
+              Sign in to connect your wallet
+            </p>
+          </div>
+        )}
+
+        {/* Processing States */}
+        {(state.status === 'authenticating' ||
+          state.status === 'exchanging' ||
+          state.status === 'hydrating' ||
+          state.status === 'ejecting') && (
           <div>
             <div className="loader"></div>
             <p className="status-message">
-              {state.status === 'hydrating' && 'Verifying credentials...'}
-              {state.status === 'authenticating' && 'Redirecting to login...'}
+              {state.status === 'authenticating' && 'Authenticating with Google...'}
+              {state.status === 'exchanging' && 'Securing session with Azure...'}
+              {state.status === 'hydrating' && 'Retrieving wallet data...'}
               {state.status === 'ejecting' && 'Opening Obsidian...'}
             </p>
           </div>
         )}
 
+        {/* Success State */}
         {state.status === 'success' && state.data && (
           <div>
+            <div className="success-icon">✓</div>
             <p className="status-message">{state.message}</p>
-            <a 
-              href={`obsidian://enoki-auth?jwt=${encodeURIComponent(state.data.jwt)}&salt=${encodeURIComponent(state.data.salt)}&address=${encodeURIComponent(state.data.address)}`}
-              className="btn-primary"
-              style={{ display: 'inline-block' }}
-            >
-              Open Obsidian
-            </a>
+            {renderManualLink()}
             <p className="helper-text" style={{ marginTop: 'var(--spacing-md)' }}>
               You may close this tab after Obsidian opens.
             </p>
           </div>
         )}
-        
-        {state.status === 'idle' && (
-          <p>This page is used to bridge authentication for Obsidian. Please initiate login from the Obsidian plugin.</p>
-        )}
       </div>
+
+      {/* Debug info (only in development) */}
+      {import.meta.env.DEV && (
+        <div className="debug-panel" style={{ marginTop: '2rem', opacity: 0.7 }}>
+          <small>
+            Status: {state.status} | 
+            Nonce: {nonceRef.current?.substring(0, 20)}...
+          </small>
+        </div>
+      )}
     </div>
   );
 }
