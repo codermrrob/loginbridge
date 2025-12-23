@@ -11,6 +11,8 @@ export interface BridgeConfig {
   backendUrl: string;
   /** Google OAuth Client ID */
   googleClientId: string;
+  /** Twitch OAuth Client ID */
+  twitchClientId: string;
   /** Azure Functions key (if required) */
   funcKey?: string;
   /** Obsidian deeplink protocol */
@@ -83,6 +85,7 @@ export function getBridgeConfig(): BridgeConfig {
   runtimeConfig = {
     backendUrl: hashConfig?.backendUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:7071',
     googleClientId: hashConfig?.googleClientId || import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+    twitchClientId: import.meta.env.VITE_TWITCH_CLIENT_ID || '',
     funcKey: hashConfig?.funcKey || undefined,  // Only from hash fragment, never from env (security)
     deeplinkProtocol: 'obsidian',
     deeplinkCallback: 'enoki-auth',
@@ -92,6 +95,7 @@ export function getBridgeConfig(): BridgeConfig {
   console.log('[Config] Bridge configuration loaded:', {
     backendUrl: runtimeConfig.backendUrl,
     googleClientId: runtimeConfig.googleClientId ? '✓ set' : '✗ MISSING',
+    twitchClientId: runtimeConfig.twitchClientId ? '✓ set' : '✗ MISSING',
     funcKey: runtimeConfig.funcKey ? '✓ set (from hash)' : '✗ MISSING - expected #funcKey=xxx in URL',
   });
 
