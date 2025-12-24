@@ -520,7 +520,7 @@ import type {
 } from '../types';
 
 /**
- * Service for handling Azure Easy Auth and Enoki bridge API calls
+ * Service for handling Azure Easy Auth and Canon Bridge API calls
  */
 export class BridgeService {
   private baseUrl: string;
@@ -1027,7 +1027,7 @@ function App() {
   return (
     <div className="container">
       <div className="card">
-        <h1>Enoki Bridge</h1>
+        <h1>Canon Bridge</h1>
 
         {/* Error State */}
         {state.status === 'error' && (

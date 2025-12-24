@@ -35,7 +35,7 @@ function App() {
         } else {
           setState({
             status: 'idle',
-            message: 'Enoki Bridge: Waiting for Obsidian connection...',
+            message: 'Canon Bridge: Waiting for Obsidian connection...',
           });
         }
       } catch (err) {
@@ -169,7 +169,7 @@ function App() {
       padding: '20px',
       textAlign: 'center'
     }}>
-      <h1>Enoki Bridge</h1>
+      <h1>Canon Bridge</h1>
       
       {state.status === 'error' && (
         <div style={{ color: 'red', maxWidth: '400px' }}>

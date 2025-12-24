@@ -18,7 +18,7 @@ import type {
 } from '../types';
 
 /**
- * Service for handling Azure Easy Auth and Enoki bridge API calls
+ * Service for handling Azure Easy Auth and Canon Bridge API calls
  */
 export class BridgeService {
   private baseUrl: string;

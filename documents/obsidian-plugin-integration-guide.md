@@ -1,6 +1,6 @@
 # Obsidian Plugin Integration & Testing Guide
 
-This guide explains how to test the **Enoki Bridge SPA** integration with the Obsidian Plugin.
+This guide explains how to test the **Canon Bridge SPA** integration with the Obsidian Plugin.
 
 ## 1. Bridge Setup (Local)
 
@@ -31,7 +31,7 @@ You can verify the Bridge is working correctly without modifying the Obsidian pl
     ```
 
 2.  **Open in Browser:**
-    - You should see the "Enoki Bridge" interface.
+    - You should see the "Canon Bridge" interface.
     - Click **"Log in with Google"** (or it may auto-redirect if configured).
 
 3.  **Complete Login:**

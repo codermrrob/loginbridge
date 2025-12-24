@@ -1,4 +1,4 @@
-# Obsidian Enoki Bridge SPA
+# Obsidian Canon Bridge SPA
 
 This directory contains the **Kickstart Code** for the Obsidian Bridge Single Page Application (SPA).
 

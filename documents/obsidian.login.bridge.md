@@ -1,4 +1,4 @@
-Here is the Developer-Level Specification for the **Enoki Bridge SPA**.
+Here is the Developer-Level Specification for the **Canon Bridge SPA**.
 
 ## 1. System Overview
 The **Bridge SPA** is a lightweight, stateless web application hosted on a public HTTPS origin. Its primary responsibility is to act as a secure proxy for the OAuth/OpenID Connect (OIDC) flow, which cannot be securely performed directly within the Obsidian (Electron) `app://` protocol.

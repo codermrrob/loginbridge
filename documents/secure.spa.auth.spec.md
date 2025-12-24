@@ -187,7 +187,7 @@ services/
 │   ├── GoogleAuthProvider.ts  # Google Identity Services implementation
 │   ├── TwitchAuthProvider.ts  # Twitch OIDC implicit flow
 │   └── index.ts               # Provider factory
-└── BridgeService.ts           # Azure Easy Auth + Enoki bridge
+└── BridgeService.ts           # Azure Easy Auth + Canon Bridge
 ```
 
 #### 4.2.2 Auth Provider Interface
@@ -279,7 +279,7 @@ Uses standard OIDC implicit flow with redirect:
 
 #### 4.2.6 Bridge Service
 
-Handles Azure Easy Auth token exchange and Enoki bridge API:
+Handles Azure Easy Auth token exchange and Canon Bridge API:
 
 ```typescript
 // services/BridgeService.ts
