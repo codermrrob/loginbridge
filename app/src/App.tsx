@@ -241,7 +241,7 @@ function App() {
   return (
     <div className="container">
       <div className="card">
-        <h1>Enoki Bridge</h1>
+        <h1>Canon Bridge</h1>
 
         {/* Error State */}
         {state.status === 'error' && (
