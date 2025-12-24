@@ -160,16 +160,37 @@ function App() {
 
         // Check for Twitch callback first (returns via hash fragment)
         const hash = window.location.hash;
-        if (hash.includes('id_token=') || hash.includes('error=')) {
-          // This is a Twitch callback - restore provider from session
+        if (hash.includes('id_token=')) {
+          // This is a successful Twitch callback - process directly without showing login UI
+          console.log('[App] Detected Twitch callback with id_token, processing directly');
+          
+          setState({
+            status: 'authenticating',
+            message: 'Processing Twitch authentication...',
+          });
+          
           const storedProvider = sessionStorage.getItem(STORAGE_KEYS.PROVIDER) as AuthProviderType || 'twitch';
           const storedNonce = sessionStorage.getItem(STORAGE_KEYS.NONCE);
           
           if (storedNonce) {
-            console.log('[App] Detected Twitch callback, restoring session');
-            await initializeAuth(storedNonce, storedProvider);
+            const authProvider = getAuthProvider(storedProvider);
+            authProvider.initialize(storedNonce, handleCredential);
+            // handleCallback is called inside initialize() and will trigger handleCredential
             return;
           }
+        }
+        
+        if (hash.includes('error=')) {
+          // Twitch returned an error
+          const hashParams = new URLSearchParams(hash.slice(1));
+          const error = hashParams.get('error_description') || hashParams.get('error') || 'Unknown error';
+          console.error('[App] Twitch callback error:', error);
+          setState({
+            status: 'error',
+            message: 'Twitch authentication failed',
+            error: error,
+          });
+          return;
         }
 
         // Parse URL parameters

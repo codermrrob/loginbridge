@@ -196,7 +196,9 @@ export class TwitchAuthProvider implements AuthProvider {
 
   private getRedirectUri(): string {
     // Use current origin + pathname as redirect URI
-    return window.location.origin + window.location.pathname;
+    // Remove trailing slash for consistency with Twitch redirect URI config
+    const pathname = window.location.pathname.replace(/\/$/, '');
+    return window.location.origin + pathname;
   }
 
   private generateState(): string {

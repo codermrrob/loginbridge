@@ -37,6 +37,11 @@ export function ejectToObsidian(data: AuthenticationResult): string {
   
   console.log('[Deeplink] Ejecting to Obsidian:', deeplink.substring(0, 100) + '...');
   
+  // Clear sensitive data from sessionStorage before leaving
+  sessionStorage.removeItem('bridge_func_key');
+  sessionStorage.removeItem('twitch_auth_state');
+  sessionStorage.removeItem('twitch_auth_nonce');
+  
   window.location.href = deeplink;
   
   return deeplink;
