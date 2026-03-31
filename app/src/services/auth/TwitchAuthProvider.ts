@@ -195,10 +195,19 @@ export class TwitchAuthProvider implements AuthProvider {
   }
 
   private getRedirectUri(): string {
-    // Use current origin + pathname as redirect URI
-    // Remove trailing slash for consistency with Twitch redirect URI config
-    const pathname = window.location.pathname.replace(/\/$/, '');
-    return window.location.origin + pathname;
+    // Use configured callback URL from environment to ensure exact match with registered redirect URI
+    if (CONFIG.callbackUrl) {
+      console.log('[TwitchAuthProvider] Using configured callback URL:', CONFIG.callbackUrl);
+      return CONFIG.callbackUrl;
+    }
+    
+    // Fallback: construct from current location (for local dev without VITE_CALLBACK_URL)
+    const origin = window.location.origin;
+    let pathname = window.location.pathname.replace(/\/index\.html$/i, '').replace(/\/$/, '');
+    if (!pathname) pathname = '/loginbridge';
+    const redirectUri = origin + pathname + '/';
+    console.log('[TwitchAuthProvider] Using computed redirect URI:', redirectUri);
+    return redirectUri;
   }
 
   private generateState(): string {

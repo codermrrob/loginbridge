@@ -181,14 +181,27 @@ function App() {
         }
         
         if (hash.includes('error=')) {
-          // Twitch returned an error
+          // Twitch returned an error in hash fragment
           const hashParams = new URLSearchParams(hash.slice(1));
           const error = hashParams.get('error_description') || hashParams.get('error') || 'Unknown error';
-          console.error('[App] Twitch callback error:', error);
+          console.error('[App] Twitch callback error (hash):', error);
           setState({
             status: 'error',
             message: 'Twitch authentication failed',
             error: error,
+          });
+          return;
+        }
+        
+        // Also check query string for OAuth errors (some providers return errors via query params)
+        const searchParams = new URLSearchParams(window.location.search);
+        if (searchParams.has('error')) {
+          const error = searchParams.get('error_description') || searchParams.get('error') || 'Unknown error';
+          console.error('[App] OAuth callback error (query):', error);
+          setState({
+            status: 'error',
+            message: 'Authentication failed',
+            error: decodeURIComponent(error.replace(/\+/g, ' ')),
           });
           return;
         }

@@ -13,6 +13,8 @@ export interface BridgeConfig {
   googleClientId: string;
   /** Twitch OAuth Client ID */
   twitchClientId: string;
+  /** OAuth callback URL (must match registered redirect URIs) */
+  callbackUrl: string;
   /** Azure Functions key (if required) */
   funcKey?: string;
   /** Obsidian deeplink protocol */
@@ -98,6 +100,7 @@ export function getBridgeConfig(): BridgeConfig {
     backendUrl: hashConfig?.backendUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:7071',
     googleClientId: hashConfig?.googleClientId || import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
     twitchClientId: import.meta.env.VITE_TWITCH_CLIENT_ID || '',
+    callbackUrl: import.meta.env.VITE_CALLBACK_URL || '',
     funcKey: hashConfig?.funcKey || storedFuncKey || undefined,
     deeplinkProtocol: 'obsidian',
     deeplinkCallback: 'enoki-auth',
@@ -108,6 +111,7 @@ export function getBridgeConfig(): BridgeConfig {
     backendUrl: runtimeConfig.backendUrl,
     googleClientId: runtimeConfig.googleClientId ? '✓ set' : '✗ MISSING',
     twitchClientId: runtimeConfig.twitchClientId ? '✓ set' : '✗ MISSING',
+    callbackUrl: runtimeConfig.callbackUrl ? '✓ set' : '✗ MISSING',
     funcKey: runtimeConfig.funcKey ? '✓ set' : '✗ MISSING - expected #funcKey=xxx in URL',
   });
 
