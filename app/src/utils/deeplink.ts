@@ -16,6 +16,7 @@ import type { AuthenticationResult } from '../types';
  */
 export function buildDeeplink(data: AuthenticationResult): string {
   const params = new URLSearchParams({
+    provider: data.provider,
     jwt: data.jwt,
     azure_token: data.azureToken,
     salt: data.salt,
@@ -36,6 +37,11 @@ export function ejectToObsidian(data: AuthenticationResult): string {
   
   console.log('[Deeplink] Ejecting to Obsidian:', deeplink.substring(0, 100) + '...');
   
+  // Clear sensitive data from sessionStorage before leaving
+  sessionStorage.removeItem('bridge_func_key');
+  sessionStorage.removeItem('twitch_auth_state');
+  sessionStorage.removeItem('twitch_auth_nonce');
+  
   window.location.href = deeplink;
   
   return deeplink;
@@ -50,12 +56,14 @@ export function ejectToObsidian(data: AuthenticationResult): string {
 export function parseObsidianParams(
   searchParams: URLSearchParams
 ): { 
-  nonce: string; 
+  nonce: string;
+  provider: 'google' | 'twitch';
   redirect: boolean; 
   prompt?: string;
 } | null {
   const source = searchParams.get('source');
   const nonce = searchParams.get('nonce');
+  const provider = searchParams.get('provider') || 'google'; // Default to google for backwards compatibility
 
   // Validate required parameters
   if (source !== 'obsidian') {
@@ -68,8 +76,15 @@ export function parseObsidianParams(
     return null;
   }
 
+  // Validate provider
+  if (provider !== 'google' && provider !== 'twitch') {
+    console.error('[Deeplink] Invalid provider:', provider);
+    return null;
+  }
+
   return {
     nonce,
+    provider,
     redirect: searchParams.get('redirect') === 'true',
     prompt: searchParams.get('prompt') || undefined,
   };

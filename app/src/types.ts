@@ -2,6 +2,10 @@
  * Bridge Application Types
  */
 
+import type { AuthProviderType } from './services/auth';
+
+export type { AuthProviderType };
+
 /**
  * Bridge state machine states
  */
@@ -20,7 +24,9 @@ export type BridgeStatus =
  * Complete authentication data returned to Obsidian
  */
 export interface AuthenticationResult {
-  /** Google ID Token (JWT with zkLogin nonce) */
+  /** OAuth provider used */
+  provider: AuthProviderType;
+  /** ID Token (JWT with zkLogin nonce) */
   jwt: string;
   /** Azure Easy Auth session token */
   azureToken: string;
@@ -46,6 +52,7 @@ export interface BridgeState {
 export interface ObsidianParams {
   source: string;
   nonce: string;
+  provider: AuthProviderType;
   redirect: boolean;
   prompt?: 'select_account' | 'consent' | 'none';
 }
@@ -68,15 +75,6 @@ export interface BridgeApiResponse {
   address?: string;
   salt?: string;
   message?: string;
-}
-
-/**
- * Google credential response from Identity Services
- */
-export interface GoogleCredentialResponse {
-  credential: string;  // JWT ID token
-  select_by: string;
-  clientId?: string;
 }
 
 // Legacy types for backwards compatibility

@@ -3,7 +3,7 @@
  * 
  * Handles communication with the Backend for hydration.
  * Uses Azure Easy Auth client-directed flow:
- * 1. POST Google ID token to /.auth/login/google
+ * 1. POST ID token to /.auth/login/{provider}
  * 2. Receive Azure session token (authenticationToken)
  * 3. Use X-ZUMO-AUTH header for subsequent API calls
  */
@@ -13,11 +13,12 @@ import type {
   EasyAuthLoginResponse, 
   BridgeApiResponse,
   AuthenticationResult,
+  AuthProviderType,
   BridgeErrorResponse,
 } from '../types';
 
 /**
- * Service for handling Azure Easy Auth and Enoki bridge API calls
+ * Service for handling Azure Easy Auth and Canon Bridge API calls
  */
 export class BridgeService {
   private baseUrl: string;
@@ -28,23 +29,28 @@ export class BridgeService {
   }
 
   /**
-   * Exchange Google ID token for Azure Easy Auth session token
+   * Exchange ID token for Azure Easy Auth session token
    * 
-   * This is the client-directed flow - we POST the Google JWT to Azure
+   * This is the client-directed flow - we POST the JWT to Azure
    * and receive an Azure session token in return.
    * 
-   * @param googleIdToken - The JWT from Google (containing zkLogin nonce)
+   * @param provider - The OAuth provider (google, twitch)
+   * @param idToken - The JWT from the provider (containing zkLogin nonce)
    * @returns Azure session token (authenticationToken)
    * @throws Error if exchange fails
    * 
    * @see https://learn.microsoft.com/en-us/azure/app-service/configure-authentication-customize-sign-in-out
    */
-  public async exchangeGoogleTokenForAzureSession(
-    googleIdToken: string
+  public async exchangeTokenForAzureSession(
+    provider: AuthProviderType,
+    idToken: string
   ): Promise<string> {
-    const url = `${this.baseUrl}/.auth/login/google`;
+    // Map provider to Azure Easy Auth endpoint
+    // Google uses 'google', Twitch is configured as custom OIDC provider
+    const authEndpoint = provider === 'twitch' ? 'twitch' : 'google';
+    const url = `${this.baseUrl}/.auth/login/${authEndpoint}`;
 
-    console.log('[BridgeService] Exchanging Google token for Azure session...');
+    console.log(`[BridgeService] Exchanging ${provider} token for Azure session...`, { url });
 
     const response = await fetch(url, {
       method: 'POST',
@@ -52,7 +58,7 @@ export class BridgeService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        id_token: googleIdToken,
+        id_token: idToken,
       }),
     });
 
@@ -83,13 +89,15 @@ export class BridgeService {
   /**
    * Call the bridge API to get user salt and address
    * 
-   * @param googleIdToken - The Google JWT (for Enoki processing)
+   * @param provider - The OAuth provider used
+   * @param idToken - The JWT (for Enoki processing)
    * @param azureSessionToken - The Azure session token for authentication
    * @returns Salt and address from Enoki
    * @throws Error if API call fails
    */
   public async hydrateUserData(
-    googleIdToken: string,
+    provider: AuthProviderType,
+    idToken: string,
     azureSessionToken: string
   ): Promise<{ salt: string; address: string }> {
     const url = `${this.baseUrl}/api/auth/bridge`;
@@ -116,8 +124,8 @@ export class BridgeService {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        provider: 'google',
-        idToken: googleIdToken,
+        provider,
+        idToken,
       }),
     });
 
@@ -156,25 +164,30 @@ export class BridgeService {
   /**
    * Complete authentication flow: Exchange token + Hydrate data
    * 
-   * @param googleIdToken - The Google JWT from Identity Services
+   * @param provider - The OAuth provider used
+   * @param idToken - The JWT from the provider
    * @returns Complete authentication result for Obsidian
    */
   public async completeAuthentication(
-    googleIdToken: string
+    provider: AuthProviderType,
+    idToken: string
   ): Promise<AuthenticationResult> {
-    // Step 1: Exchange Google token for Azure session
-    const azureToken = await this.exchangeGoogleTokenForAzureSession(
-      googleIdToken
+    // Step 1: Exchange token for Azure session
+    const azureToken = await this.exchangeTokenForAzureSession(
+      provider,
+      idToken
     );
 
     // Step 2: Hydrate user data (salt + address)
     const { salt, address } = await this.hydrateUserData(
-      googleIdToken,
+      provider,
+      idToken,
       azureToken
     );
 
     return {
-      jwt: googleIdToken,
+      provider,
+      jwt: idToken,
       azureToken,
       salt,
       address,
